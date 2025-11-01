@@ -1,0 +1,130 @@
+apiVersion: sagemaker.amazonaws.com/v1
+kind: HyperPodPyTorchJob
+metadata:
+  name: qwen-hpto
+  labels:
+    app.kubernetes.io/name: HyperPod
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  nprocPerNode: '1'
+  runPolicy:
+    jobMaxRetryCount: 10
+    restartPolicy:
+      numRestartBeforeFullJobRestart: 3
+      evalPeriodSeconds: 21600
+      maxFullJobRestarts: 1
+    cleanPodPolicy: All
+    logMonitoringConfiguration:
+      - name: JobStart
+        logPattern: '.*train/loss:.*'
+        expectedStartCutOffInSeconds: 240
+      - name: JobHangingDetection
+        logPattern: '.*train/loss:.*'
+        expectedRecurringFrequencyInSeconds: 600
+  replicaSpecs:
+    - name: pods
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            job-name: qwen-sft-hpto
+            replica-type: pods
+        spec:
+          serviceAccountName: mlflow-access
+          volumes:
+            - name: shmem
+              hostPath:
+                path: /dev/shm
+            - name: local
+              hostPath:
+                path: /mnt/k8s-disks/0
+            - name: persistent-storage
+              persistentVolumeClaim:
+                claimName: fsx-claim
+            - name: code-sync
+              emptyDir: {}
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      job-name: qwen-sft-hpto
+                  topologyKey: kubernetes.io/hostname
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: beta.kubernetes.io/instance-type
+                        operator: In
+                        values:
+                          - "ml.g5.2xlarge"
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: DoNotSchedule
+              labelSelector:
+                matchLabels:
+                  job-name: qwen-sft-hpto
+          initContainers:
+          - name: install-deps
+            image: python:3.9
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                pip install git+https://github.com/kubernetes/git-sync.git && \
+                git-sync --repo https://github.com/aruncs2005/qwen-sft-k8s.git --root /code --one-time && \
+                pip install -r /code/src/requirements.txt
+            volumeMounts:
+              - name: code-sync
+                mountPath: /code
+          containers:
+            - name: pytorch
+              image: 763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:2.8.0-gpu-py312-cu129-ubuntu22.04-sagemaker
+              imagePullPolicy: Always
+              resources:
+                requests:
+                  nvidia.com/gpu: 8
+                  vpc.amazonaws.com/efa: 32
+                limits:
+                  nvidia.com/gpu: 8
+                  vpc.amazonaws.com/efa: 32
+              env:
+                - name: LOGLEVEL
+                  value: INFO
+                - name: TORCH_DISTRIBUTED_DEBUG
+                  value: DETAIL
+                - name: TORCH_NCCL_ENABLE_MONITORING
+                  value: '1'
+                - name: TORCH_NCCL_TRACE_BUFFER_SIZE
+                  value: '20000'
+                - name: TORCH_NCCL_DUMP_ON_TIMEOUT
+                  value: '1'
+                - name: TORCH_NCCL_DEBUG_INFO_TEMP_FILE
+                  value: /local/nccl_trace_rank_
+                - name: PYTORCH_CUDA_ALLOC_CONF
+                  value: 'expandable_segments:True'
+                - name: NCCL_DEBUG
+                  value: INFO
+                - name: TORCH_NCCL_ASYNC_ERROR_HANDLING
+                  value: '1'
+              command: ["hyperpodrun"]
+              args:
+                - "--tee=3"
+                - "--nnodes=1"
+                - "--nproc_per_node=1"
+                - /code/src/train.py
+                - '--max_context_width=4096'
+                - '--num_key_value_heads=40'
+                - '--intermediate_size=13824'
+                - '--hidden_width=5120'
+                - '--num_layers=40'
+                - '--num_heads=40'
+              volumeMounts:
+                - name: shmem
+                  mountPath: /dev/shm
+                - name: local
+                  mountPath: /local
+                - name: persistent-storage
+                  mountPath: /data
+                - name: code-sync
+                  mountPath: /code
