@@ -30,7 +30,7 @@ spec:
             job-name: qwen-sft-hpto
             replica-type: pods
         spec:
-          serviceAccountName: mlflow-access
+          serviceAccountName: sagemaker-mlflow-sa
           volumes:
             - name: shmem
               hostPath:
@@ -54,25 +54,17 @@ spec:
               requiredDuringSchedulingIgnoredDuringExecution:
                 nodeSelectorTerms:
                   - matchExpressions:
-                      - key: beta.kubernetes.io/instance-type
+                      - key: node.kubernetes.io/instance-type
                         operator: In
                         values:
                           - "ml.g5.2xlarge"
-          topologySpreadConstraints:
-            - maxSkew: 1
-              topologyKey: kubernetes.io/hostname
-              whenUnsatisfiable: DoNotSchedule
-              labelSelector:
-                matchLabels:
-                  job-name: qwen-sft-hpto
           initContainers:
           - name: install-deps
-            image: python:3.9
+            image: python:3.12
             command: ["/bin/sh", "-c"]
             args:
               - |
-                pip install git+https://github.com/kubernetes/git-sync.git && \
-                git-sync --repo https://github.com/aruncs2005/qwen-sft-k8s.git --root /code --one-time && \
+                git clone https://github.com/aruncs2005/qwen-sft-k8s.git /code && \
                 pip install -r /code/src/requirements.txt
             volumeMounts:
               - name: code-sync
@@ -83,11 +75,9 @@ spec:
               imagePullPolicy: Always
               resources:
                 requests:
-                  nvidia.com/gpu: 8
-                  vpc.amazonaws.com/efa: 32
+                  nvidia.com/gpu: 1
                 limits:
-                  nvidia.com/gpu: 8
-                  vpc.amazonaws.com/efa: 32
+                  nvidia.com/gpu: 1
               env:
                 - name: LOGLEVEL
                   value: INFO
