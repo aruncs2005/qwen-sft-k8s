@@ -93,8 +93,8 @@ spec:
                 - "--nnodes=1"
                 - "--nproc_per_node=1"
                 - /workspace/qwen_train.py
-                - '--dataset_name=Agent-Ark/Toucan-1.5M'
-                - '--dataset_split=SFT'
+                - '--train_patu=/workspace/xlam/train'
+                - '--eval_path=/workspace/xlam/eval'
                 - '--model_id=Qwen/Qwen3-1.7B'
                 - '--max_seq_length=1024'
                 - '--mlflow_tracking_server=arn:aws:sagemaker:us-west-2:535002850097:mlflow-tracking-server/SageMakerMLFlowTS'
