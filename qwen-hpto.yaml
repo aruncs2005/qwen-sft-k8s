@@ -8,19 +8,19 @@ metadata:
 spec:
   nprocPerNode: '1'
   runPolicy:
-    jobMaxRetryCount: 10
+    jobMaxRetryCount: 2
     restartPolicy:
-      numRestartBeforeFullJobRestart: 3
+      numRestartBeforeFullJobRestart: 2
       evalPeriodSeconds: 21600
       maxFullJobRestarts: 1
     cleanPodPolicy: All
-    logMonitoringConfiguration:
-      - name: JobStart
-        logPattern: '.*train/loss:.*'
-        expectedStartCutOffInSeconds: 240
-      - name: JobHangingDetection
-        logPattern: '.*train/loss:.*'
-        expectedRecurringFrequencyInSeconds: 600
+    # logMonitoringConfiguration:
+    #   - name: JobStart
+    #     logPattern: '.*loss:.*'
+    #     expectedStartCutOffInSeconds: 180
+    #   - name: JobHangingDetection
+    #     logPattern: '.*loss:.*'
+    #     expectedRecurringFrequencyInSeconds: 240
   replicaSpecs:
     - name: pods
       replicas: 1
@@ -58,20 +58,9 @@ spec:
                         operator: In
                         values:
                           - "ml.g5.2xlarge"
-          initContainers:
-          - name: install-deps
-            image: python:3.12
-            command: ["/bin/sh", "-c"]
-            args:
-              - |
-                git clone https://github.com/aruncs2005/qwen-sft-k8s.git /code && \
-                pip install -r /code/src/requirements.txt
-            volumeMounts:
-              - name: code-sync
-                mountPath: /code
           containers:
             - name: pytorch
-              image: 763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:2.8.0-gpu-py312-cu129-ubuntu22.04-sagemaker
+              image: 535002850097.dkr.ecr.us-west-2.amazonaws.com/qwen-sft:latest
               imagePullPolicy: Always
               resources:
                 requests:
@@ -100,15 +89,32 @@ spec:
               command: ["hyperpodrun"]
               args:
                 - "--tee=3"
+                - "--shutdown-timeout=120"
                 - "--nnodes=1"
                 - "--nproc_per_node=1"
-                - /code/src/train.py
-                - '--max_context_width=4096'
-                - '--num_key_value_heads=40'
-                - '--intermediate_size=13824'
-                - '--hidden_width=5120'
-                - '--num_layers=40'
-                - '--num_heads=40'
+                - /workspace/qwen_train.py
+                - '--dataset_name=Agent-Ark/Toucan-1.5M'
+                - '--dataset_split=SFT'
+                - '--model_id=Qwen/Qwen3-1.7B'
+                - '--max_seq_length=1024'
+                - '--mlflow_tracking_server=arn:aws:sagemaker:us-west-2:535002850097:mlflow-tracking-server/SageMakerMLFlowTS'
+                - '--mlflow_exp_name=qwen-sft'
+                - '--mlflow_run_id=37579957ebe8446b9fbddcc9ed7665fd'
+                - '--per_device_train_batch_size=2'
+                - '--per_device_eval_batch_size=2'
+                - '--gradient_accumulation_steps=4'
+                - '--learning_rate=2e-4'
+                - '--num_train_epochs=1'
+                - '--logging_steps=10'
+                - '--fp16=True'
+                - '--save_strategy=steps'
+                - '--eval_strategy=steps'
+                - '--save_steps=400'
+                - '--eval_steps=200'
+                - '--eval_on_start=True'
+                - '--max_steps=400'
+                - '--output_dir=/data/checkpoint'
+                - '--report_to=mlflow'
               volumeMounts:
                 - name: shmem
                   mountPath: /dev/shm

@@ -22,36 +22,6 @@ from trl import SFTTrainer
 import mlflow
 
 
-
-def set_custom_env(env_vars: Dict[str, str]) -> None:
-    """
-    Set custom environment variables.
-
-    Args:
-        env_vars (Dict[str, str]): A dictionary of environment variables to set.
-                                   Keys are variable names, values are their corresponding values.
-
-    Returns:
-        None
-
-    Raises:
-        TypeError: If env_vars is not a dictionary.
-        ValueError: If any key or value in env_vars is not a string.
-    """
-    if not isinstance(env_vars, dict):
-        raise TypeError("env_vars must be a dictionary")
-
-    for key, value in env_vars.items():
-        if not isinstance(key, str) or not isinstance(value, str):
-            raise ValueError("All keys and values in env_vars must be strings")
-
-    os.environ.update(env_vars)
-
-    # Optionally, print the updated environment variables
-    print("Updated environment variables:")
-    for key, value in env_vars.items():
-        print(f"  {key}: {value}")
-
 @dataclass
 class ScriptArguments:
     """
@@ -60,7 +30,7 @@ class ScriptArguments:
 
     train_dataset_path: Optional[str] = field(
         default=None,
-        metadata={"help": "Path to the training dataset, e.g., /opt/ml/input/data/train/"}
+        metadata={"help": "Path to the training dataset, e.g., /fsx/input"}
     )
 
     test_dataset_path: Optional[str] = field(
@@ -179,16 +149,42 @@ def training_function(script_args, training_args):
     ################
 
     # LoRA config based on QLoRA paper & Sebastian Raschka experiment
+  
+# LoRA config
     peft_config = LoraConfig(
-        lora_alpha=8,
-        lora_dropout=0.05,
-        r=16,
-        bias="none",
-        target_modules="all-linear",
-        task_type="CAUSAL_LM",
-        # modules_to_save = ["lm_head", "embed_tokens"] # add if you want to use the Llama 3 instruct template
+        lora_alpha=16,                           # Scaling factor for LoRA
+        lora_dropout=0.05,                       # Add slight dropout for regularization
+        r=64,                                    # Rank of the LoRA update matrices
+        bias="none",                             # No bias reparameterization
+        task_type="CAUSAL_LM",                   # Task type: Causal Language Modeling
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],  # Target modules for LoRA
     )
     
+
+    training_arguments = TrainingArguments(
+    output_dir="output",
+    per_device_train_batch_size=1,
+    per_device_eval_batch_size=1,
+    gradient_accumulation_steps=2,
+    optim="paged_adamw_32bit",
+    num_train_epochs=1,
+    logging_steps=0.2,
+    warmup_steps=10,
+    logging_strategy="steps",
+    learning_rate=2e-4,
+    fp16=False,
+    bf16=False,
+    group_by_length=True,
+    report_to="none"
+)
     
     ################
     # Training
@@ -197,7 +193,7 @@ def training_function(script_args, training_args):
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        dataset_text_field="text",
+        dataset_text_field="messages",
         eval_dataset=test_dataset,
         peft_config=peft_config,
         max_seq_length=script_args.max_seq_length,
