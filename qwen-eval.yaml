@@ -1,0 +1,39 @@
+apiVersion: "v1"
+kind: Pod
+metadata:
+  name: evaluate-model
+spec:
+      volumes:
+        - name: shmem
+          hostPath:
+            path: /dev/shm
+        - name: persistent-storage
+          persistentVolumeClaim:
+            claimName: fsx-claim
+        - name: local
+          hostPath:
+            path: /dev
+      nodeSelector:
+        node.kubernetes.io/instance-type: "ml.g5.2xlarge"
+      containers:
+          - name: evaluation-container
+            image: 535002850097.dkr.ecr.us-west-2.amazonaws.com/qwen-sft:latest
+            env:
+              - name: LOGLEVEL
+                value: "DEBUG"
+            command:
+                - "python"
+                - "/src/llama4_eval.py"
+                - "--model_path=/fsx/llama4_scout"
+                - "--dataset_path=/fsx/eval"
+                - "--images_base_path=/fsx/freedom_medical"   
+            volumeMounts:
+              - name: shmem
+                mountPath: /dev/shm
+              - name: persistent-storage
+                mountPath: /fsx
+            resources:
+              limits:
+                nvidia.com/gpu: 1
+      
+      restartPolicy: Never

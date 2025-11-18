@@ -1,17 +1,14 @@
-import logging
 from dataclasses import dataclass, field
 from typing import Optional
 
 import os
-import random
 import torch
-from datasets import load_dataset
+from datasets import load_from_disk
 from transformers import AutoTokenizer, TrainingArguments
 from trl import TrlParser
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    BitsAndBytesConfig,
     set_seed,
 )
 from peft import LoraConfig, get_peft_model
@@ -21,7 +18,6 @@ from trl import SFTTrainer
 
 import mlflow
 from utils import set_custom_env
-import json 
 import sys
 from data import process_dataset, preview_dataset_sample
 
@@ -78,43 +74,27 @@ def setup_tokenizer(script_args:ScriptArguments):
 
 def create_dataset(script_args:ScriptArguments,tokenizer)->Tuple:
     
-    train_ds = load_dataset(script_args.train_path)
-    eval_ds = load_dataset(script_args.eval_path)
+    train_ds = load_from_disk(script_args.train_path)
+    eval_ds = load_from_disk(script_args.eval_path)
 
-    # def format_for_qwen(example):
-    #     messages = json.loads(example["messages"])
-    #     chat_text = tokenizer.apply_chat_template(
-    #         messages, tokenize=False, add_generation_prompt=True
-    #     )
-    #     return tokenizer(chat_text, max_length=script_args.max_seq_length, truncation=True)
+    processed_train_ds = process_dataset(tokenizer,train_ds)
+    processed_eval_ds = process_dataset(tokenizer,eval_ds)
 
-    # tokenized_train_ds = train_ds.map(format_for_qwen, batched=False)
-    # tokenized_test_ds = test_ds.map(format_for_qwen, batched=False)
     print("***** Sample data from Training set*****")
-    preview_dataset_sample(train_ds, 0)
+    preview_dataset_sample(processed_train_ds, 0)
     print("***** Sample data from Eval set*****")
-    preview_dataset_sample(eval_ds,0)
+    preview_dataset_sample(processed_eval_ds,0)
 
-    tokenized_train_ds = process_dataset(tokenizer,train_ds)
-    tokenized_eval_ds = process_dataset(tokenizer,train_ds)
-
-    return tokenized_train_ds,tokenized_eval_ds
+    return processed_train_ds,processed_eval_ds
 
 
 def load_model(script_args:ScriptArguments)-> Any:
 
-    bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_use_double_quant=False,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16,
-    )
-
     model = AutoModelForCausalLM.from_pretrained(
     script_args.model_id,
-    #quantization_config=bnb_config,   
     device_map="auto",  
     torch_dtype=torch.bfloat16,
+    attn_implementation="flash_attention_2"
     trust_remote_code=True             
     )
 
@@ -155,12 +135,14 @@ def training_function(script_args, training_args):
 
     #Load Peft model
     model = load_model(script_args)
+    training_args.dataset_text_field="text"
 
     trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset
+
     )
 
     trainer.train()
@@ -192,4 +174,5 @@ if __name__ == "__main__":
 
     # launch training
     training_function(script_args, training_args)
+    torch.distributed.destroy_process_group()
     sys.exit(0)

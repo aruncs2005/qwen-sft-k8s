@@ -102,7 +102,7 @@ def process_dataset(tokenizer: AutoTokenizer, dataset: Dataset, sample_size: Opt
     )
 
     print("✅ Dataset processing complete!")
-    print(f"📊 Final dataset size: {len(processed_dataset):, } samples")
+    print(f"📊 Final dataset size: {len(processed_dataset)} samples")
     print(f"🔤 Average text length: {sum(len(text) for text in processed_dataset['text']) / len(processed_dataset):.2f}")
 
     return processed_dataset

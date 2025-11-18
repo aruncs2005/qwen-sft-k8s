@@ -14,13 +14,13 @@ spec:
       evalPeriodSeconds: 21600
       maxFullJobRestarts: 1
     cleanPodPolicy: All
-    # logMonitoringConfiguration:
-    #   - name: JobStart
-    #     logPattern: '.*loss:.*'
-    #     expectedStartCutOffInSeconds: 180
-    #   - name: JobHangingDetection
-    #     logPattern: '.*loss:.*'
-    #     expectedRecurringFrequencyInSeconds: 240
+    logMonitoringConfiguration:
+      - name: JobStart
+        logPattern: ".*'loss':.*"
+        expectedStartCutOffInSeconds: 600
+      - name: JobHangingDetection
+        logPattern: ".*'loss':.*"
+        expectedRecurringFrequencyInSeconds: 600
   replicaSpecs:
     - name: pods
       replicas: 1
@@ -93,8 +93,8 @@ spec:
                 - "--nnodes=1"
                 - "--nproc_per_node=1"
                 - /workspace/qwen_train.py
-                - '--train_patu=/workspace/xlam/train'
-                - '--eval_path=/workspace/xlam/eval'
+                - '--train_path=/workspace/train'
+                - '--eval_path=/workspace/eval'
                 - '--model_id=Qwen/Qwen3-1.7B'
                 - '--max_seq_length=1024'
                 - '--mlflow_tracking_server=arn:aws:sagemaker:us-west-2:535002850097:mlflow-tracking-server/SageMakerMLFlowTS'
@@ -106,7 +106,7 @@ spec:
                 - '--learning_rate=2e-4'
                 - '--num_train_epochs=1'
                 - '--logging_steps=10'
-                - '--fp16=True'
+                - '--bf16=True'
                 - '--save_strategy=steps'
                 - '--eval_strategy=steps'
                 - '--save_steps=400'
