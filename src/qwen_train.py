@@ -94,7 +94,7 @@ def load_model(script_args:ScriptArguments)-> Any:
     script_args.model_id,
     device_map="auto",  
     torch_dtype=torch.bfloat16,
-    attn_implementation="flash_attention_2"
+    attn_implementation="flash_attention_2",
     trust_remote_code=True             
     )
 
