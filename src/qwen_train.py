@@ -76,6 +76,10 @@ def create_dataset(script_args:ScriptArguments,tokenizer)->Tuple:
     
     train_ds = load_from_disk(script_args.train_path)
     eval_ds = load_from_disk(script_args.eval_path)
+    mlflow_train_dataset = mlflow.data.huggingface_dataset.from_huggingface(train_ds)
+    mlflow_test_dataset = mlflow.data.huggingface_dataset.from_huggingface(eval_ds)
+    mlflow.log_input(mlflow_train_dataset, context="train")
+    mlflow.log_input(mlflow_test_dataset, context="test")
 
     processed_train_ds = process_dataset(tokenizer,train_ds)
     processed_eval_ds = process_dataset(tokenizer,eval_ds)

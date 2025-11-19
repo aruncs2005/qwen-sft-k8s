@@ -1,39 +1,40 @@
-apiVersion: "v1"
-kind: Pod
-metadata:
-  name: evaluate-model
-spec:
-      volumes:
-        - name: shmem
-          hostPath:
-            path: /dev/shm
-        - name: persistent-storage
-          persistentVolumeClaim:
-            claimName: fsx-claim
-        - name: local
-          hostPath:
-            path: /dev
-      nodeSelector:
-        node.kubernetes.io/instance-type: "ml.g5.2xlarge"
-      containers:
-          - name: evaluation-container
-            image: 535002850097.dkr.ecr.us-west-2.amazonaws.com/qwen-sft:latest
-            env:
-              - name: LOGLEVEL
-                value: "DEBUG"
-            command:
-                - "python"
-                - "/src/llama4_eval.py"
-                - "--model_path=/fsx/llama4_scout"
-                - "--dataset_path=/fsx/eval"
-                - "--images_base_path=/fsx/freedom_medical"   
-            volumeMounts:
-              - name: shmem
-                mountPath: /dev/shm
-              - name: persistent-storage
-                mountPath: /fsx
-            resources:
-              limits:
-                nvidia.com/gpu: 1
-      
-      restartPolicy: Never
+  apiVersion: "v1"
+  kind: Pod
+  metadata:
+    name: evaluate-model
+  spec:
+        volumes:
+          - name: shmem
+            hostPath:
+              path: /dev/shm
+          - name: persistent-storage
+            persistentVolumeClaim:
+              claimName: fsx-claim
+          - name: local
+            hostPath:
+              path: /dev
+        nodeSelector:
+          node.kubernetes.io/instance-type: "ml.g5.2xlarge"
+        containers:
+            - name: evaluation-container
+              image: public.ecr.aws/o8u4p8i7/qwen-hpto:latest
+              env:
+                - name: LOGLEVEL
+                  value: "DEBUG"
+              command:
+                  - "python"
+                  - "/workspace/evaluate.py"
+                  - "--model_path=/data/qwen3"
+                  - "--eval_path=/workspace/eval"
+                  - '--mlflow_tracking_server=arn:aws:sagemaker:us-west-2:535002850097:mlflow-tracking-server/SageMakerMLFlowTS'
+                  - '--mlflow_exp_name=qwen-sft'
+              volumeMounts:
+                - name: shmem
+                  mountPath: /dev/shm
+                - name: persistent-storage
+                  mountPath: /data
+              resources:
+                limits:
+                  nvidia.com/gpu: 1
+        
+        restartPolicy: Never

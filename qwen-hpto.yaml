@@ -60,7 +60,7 @@ spec:
                           - "ml.g5.2xlarge"
           containers:
             - name: pytorch
-              image: 535002850097.dkr.ecr.us-west-2.amazonaws.com/qwen-sft:latest
+              image: public.ecr.aws/o8u4p8i7/qwen-hpto:latest
               imagePullPolicy: Always
               resources:
                 requests:
